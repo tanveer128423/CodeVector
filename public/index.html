@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CodeVector — Product Browser</title>
+<style>
+  :root { --bg:#0f1117; --card:#191c24; --line:#2a2e3a; --txt:#e6e8ee; --mut:#9aa1b0; --accent:#5b8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:24px 20px 12px; max-width:1000px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--mut); font-size:13px; }
+  .controls { max-width:1000px; margin:12px auto; padding:0 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  select { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:8px;
+           padding:8px 10px; font-size:14px; }
+  .meta { color:var(--mut); font-size:12px; margin-left:auto; }
+  main { max-width:1000px; margin:0 auto; padding:0 20px 60px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.price { font-variant-numeric:tabular-nums; }
+  .cat { background:#222633; border:1px solid var(--line); padding:2px 8px; border-radius:999px; font-size:12px; color:#bcc4d6; }
+  .actions { text-align:center; padding:24px 0; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 18px;
+           font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .empty { text-align:center; color:var(--mut); padding:40px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Product Browser</h1>
+    <div class="sub">~200,000 products · newest first · keyset pagination with a consistent snapshot</div>
+  </header>
+
+  <div class="controls">
+    <label>Category:
+      <select id="category">
+        <option value="">All categories</option>
+      </select>
+    </label>
+    <span class="meta" id="meta"></span>
+  </div>
+
+  <main>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Created</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none;">No products found.</div>
+    <div class="actions">
+      <button id="more">Load more</button>
+    </div>
+  </main>
+
+<script>
+  // API base = same origin (the server serves both API and this page).
+  const $ = (id) => document.getElementById(id);
+  const rowsEl = $('rows'), moreBtn = $('more'), metaEl = $('meta'), emptyEl = $('empty'), catEl = $('category');
+
+  let snapshot = null;   // pinned at the start of a browsing session for consistency
+  let cursor = null;     // opaque token for the next page
+  let loaded = 0;
+
+  function fmtPrice(p) { return '$' + Number(p).toFixed(2); }
+  function fmtDate(s) { return new Date(s).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }); }
+
+  function appendRows(products) {
+    for (const p of products) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + p.id + '</td>' +
+        '<td>' + p.name + '</td>' +
+        '<td><span class="cat">' + p.category + '</span></td>' +
+        '<td class="price">' + fmtPrice(p.price) + '</td>' +
+        '<td>' + fmtDate(p.created_at) + '</td>';
+      rowsEl.appendChild(tr);
+    }
+  }
+
+  async function loadPage() {
+    moreBtn.disabled = true;
+    moreBtn.textContent = 'Loading…';
+    const params = new URLSearchParams({ limit: '25' });
+    if (catEl.value) params.set('category', catEl.value);
+    if (snapshot) params.set('snapshot', snapshot);   // keep the session frozen
+    if (cursor) params.set('cursor', cursor);
+
+    const res = await fetch('/products?' + params.toString());
+    const data = await res.json();
+
+    snapshot = data.snapshot;          // first call establishes it
+    cursor = data.nextCursor;
+    appendRows(data.products);
+    loaded += data.products.length;
+
+    emptyEl.style.display = loaded === 0 ? 'block' : 'none';
+    metaEl.textContent = 'Showing ' + loaded + ' products · snapshot ' + new Date(snapshot).toLocaleTimeString();
+
+    if (cursor) {
+      moreBtn.disabled = false;
+      moreBtn.textContent = 'Load more';
+    } else {
+      moreBtn.disabled = true;
+      moreBtn.textContent = 'No more products';
+    }
+  }
+
+  function resetAndLoad() {
+    rowsEl.innerHTML = '';
+    snapshot = null; cursor = null; loaded = 0;   // new session => new snapshot
+    loadPage();
+  }
+
+  async function loadCategories() {
+    try {
+      const res = await fetch('/categories');
+      const { categories } = await res.json();
+      for (const c of categories) {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        catEl.appendChild(opt);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  moreBtn.addEventListener('click', loadPage);
+  catEl.addEventListener('change', resetAndLoad);
+
+  loadCategories();
+  loadPage();
+</script>
+</body>
+</html>

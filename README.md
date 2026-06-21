@@ -3,8 +3,10 @@
 A small backend to browse ~200,000 products **newest first**, **filter by category**,
 and **paginate fast** — while staying **consistent as data changes**.
 
-> Status: Day 1–2 complete (schema, fast seed, keyset API, snapshot consistency,
-> a correctness proof script, and benchmarks). Day 3: deploy + optional UI.
+**Live demo:** _<add your Render URL here after deploying>_ — `/` is the UI, `/products` is the API.
+
+> Schema, fast 200k seed, keyset API, snapshot consistency, a correctness proof
+> script, benchmarks, a tiny browser UI, and free-tier deploy instructions.
 
 ## The two hard parts (and how this solves them)
 
@@ -137,10 +139,38 @@ npm run benchmark           # keyset vs OFFSET timings
 npm run test:consistency    # proves no-dupe/no-skip under concurrent writes
 ```
 
-## Deploy
-- **DB:** Neon / Supabase (free). Put the connection string in `DATABASE_URL`.
-- **API:** Render (see [`render.yaml`](render.yaml)). Set `DATABASE_URL`, then run
-  `npm run migrate && npm run seed` once against the hosted DB.
+## UI
+A tiny zero-build browser UI is served at `/` (the same Render service serves both
+the API and the UI). It has a **category dropdown**, a **products table**, and a
+**Load more** button, and it carries the `snapshot` + `cursor` across pages so the
+view stays consistent. See [`public/index.html`](public/index.html).
+
+## Deploy (free tier, no credit card)
+
+### 1. Database — Neon
+1. Create a project at [neon.tech](https://neon.tech) and copy the connection
+   string (it looks like `postgres://user:pass@ep-xxx.neon.tech/neondb?sslmode=require`).
+
+### 2. Seed the DB (once, from your machine)
+```bash
+export DATABASE_URL="<your-neon-connection-string>"
+npm install
+npm run migrate          # creates table + indexes
+npm run seed             # generates 200k products (~seconds)
+```
+(`src/db.js` auto-enables SSL for Neon/Supabase connection strings.)
+
+### 3. API + UI — Render
+1. Push this repo to GitHub.
+2. On [render.com](https://render.com) → **New → Web Service** → connect the repo.
+   Render auto-detects [`render.yaml`](render.yaml), or set manually:
+   - Build: `npm install`
+   - Start: `npm start`
+   - Health check path: `/health`
+3. Add env var `DATABASE_URL` = your Neon string.
+4. Deploy. Open the Render URL — `/` is the UI, `/products` is the API.
+
+Render sets `PORT` automatically; the server reads `process.env.PORT`.
 
 ## Tradeoffs & what I'd improve with more time
 - **Snapshot stored client-side.** It's just a timestamp echoed back by the client,

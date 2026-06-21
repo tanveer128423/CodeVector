@@ -1,5 +1,6 @@
 'use strict';
 
+const path = require('path');
 const express = require('express');
 const { pool } = require('./db');
 const productsRouter = require('./routes/products');
@@ -8,6 +9,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Serve the tiny browser UI (public/index.html) from the same service,
+// so a single Render URL gives you both the API and a UI to click around.
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Permissive CORS so the optional UI (any origin) can call the API.
 app.use((req, res, next) => {
@@ -42,7 +47,8 @@ app.get('/categories', async (req, res, next) => {
 
 app.use('/', productsRouter);
 
-app.get('/', (req, res) => {
+// API info (the UI itself is served as the static index.html at '/').
+app.get('/api', (req, res) => {
   res.json({
     name: 'CodeVector Products API',
     endpoints: ['/health', '/categories', '/products'],
