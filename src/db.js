@@ -10,12 +10,16 @@ if (!process.env.DATABASE_URL) {
 // Managed Postgres providers (Neon/Supabase) require SSL. We keep it relaxed
 // (rejectUnauthorized: false) because their certs are signed by their own CA and
 // we connect over a trusted network path. For a stricter setup you'd pin the CA.
-const needsSsl = /neon\.tech|supabase\.co|render\.com|sslmode=require/.test(
-  process.env.DATABASE_URL
-);
+const rawUrl = process.env.DATABASE_URL;
+const needsSsl = /neon\.tech|supabase\.co|render\.com|sslmode=/.test(rawUrl);
+
+// Strip sslmode from the URL and configure SSL explicitly via the `ssl` option.
+// This avoids pg-connection-string's noisy "sslmode treated as verify-full"
+// deprecation warning while keeping the connection encrypted.
+const connectionString = rawUrl.replace(/([?&])sslmode=[^&]*/i, '$1').replace(/[?&]$/, '');
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl: needsSsl ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 30000,
