@@ -31,30 +31,31 @@ async function main() {
   console.time('seed');
   console.log(`Seeding ${COUNT} products...`);
 
-  // Build a few arrays in Postgres so we can index into them with random offsets.
+  // IMPORTANT: random() must live in the SELECT list of a subquery over
+  // generate_series so it is evaluated once *per row*. A `CROSS JOIN LATERAL
+  // (SELECT random() ...)` that doesn't reference the outer row can be evaluated
+  // a single time, giving every row identical values — a subtle Postgres trap.
+  //
   // created_at is spread across the last ~365 days so "newest first" is meaningful;
-  // updated_at starts equal to created_at (some can be bumped later to simulate edits).
+  // updated_at starts equal to created_at (some are bumped later to simulate edits).
   const sql = `
     INSERT INTO products (name, category, price, created_at, updated_at)
     SELECT
-      adj.v || ' ' || noun.v || ' #' || g                         AS name,
-      cat.v                                                        AS category,
-      ROUND((5 + random() * 995)::numeric, 2)                     AS price,
-      ts                                                          AS created_at,
-      ts                                                          AS updated_at
-    FROM generate_series(1, $1) AS g
-    CROSS JOIN LATERAL (
-      SELECT (now() - (random() * interval '365 days')) AS ts
-    ) t
-    CROSS JOIN LATERAL (
-      SELECT ($2::text[])[1 + floor(random() * array_length($2::text[], 1))::int] AS v
-    ) cat
-    CROSS JOIN LATERAL (
-      SELECT ($3::text[])[1 + floor(random() * array_length($3::text[], 1))::int] AS v
-    ) adj
-    CROSS JOIN LATERAL (
-      SELECT ($4::text[])[1 + floor(random() * array_length($4::text[], 1))::int] AS v
-    ) noun;
+      ($3::text[])[s.adj_i] || ' ' || ($4::text[])[s.noun_i] || ' #' || s.g  AS name,
+      ($2::text[])[s.cat_i]                                                   AS category,
+      s.price                                                                AS price,
+      s.ts                                                                   AS created_at,
+      s.ts                                                                   AS updated_at
+    FROM (
+      SELECT
+        g,
+        now() - (random() * interval '365 days')                  AS ts,
+        1 + floor(random() * array_length($2::text[], 1))::int    AS cat_i,
+        1 + floor(random() * array_length($3::text[], 1))::int    AS adj_i,
+        1 + floor(random() * array_length($4::text[], 1))::int    AS noun_i,
+        ROUND((5 + random() * 995)::numeric, 2)                   AS price
+      FROM generate_series(1, $1) AS g
+    ) s;
   `;
 
   const res = await pool.query(sql, [COUNT, CATEGORIES, ADJECTIVES, NOUNS]);
