@@ -3,7 +3,7 @@
 A small backend to browse ~200,000 products **newest first**, **filter by category**,
 and **paginate fast** — while staying **consistent as data changes**.
 
-**Live demo:** _<add your Render URL here after deploying>_ — `/` is the UI, `/products` is the API.
+**Live demo:** https://codevector-dj3h.onrender.com/ — `/` is the UI, `/products` is the API.
 
 > Schema, fast 200k seed, keyset API, snapshot consistency, a correctness proof
 > script, benchmarks, a tiny browser UI, and free-tier deploy instructions.
